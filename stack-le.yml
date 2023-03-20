@@ -9,25 +9,9 @@ networks:
         - subnet: "10.99.0.0/16"
 
 volumes:
-  certs: {}
   portainer: {}
 
 services:
-  certs:
-    image: alpine
-    networks:
-      - swarm-net
-    volumes:
-      - certs:/etc/ssl/traefik
-    command: sh -c "cd /etc/ssl/traefik
-      && wget traefik.me/cert.pem -O cert.pem
-      && wget traefik.me/privkey.pem -O privkey.pem"
-    deploy:
-      placement:
-        constraints: [node.role == manager]
-      restart_policy:
-        condition: on-failure
-
   traefik:
     hostname: traefik
     image: traefik:latest
@@ -48,8 +32,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./traefik/tls.yml:/etc/traefik/tls.yml:ro
-      - certs:/etc/ssl/traefik:ro
+      - ./letsencrypt/acme.json:/letsencrypt/acme.json
     command:
       - "--api"
       - "--log.level=DEBUG"
@@ -59,11 +42,16 @@ services:
       - "--providers.docker=true"
       - "--providers.docker.watch"
       - "--providers.docker.swarmmode=true"
-      - "--providers.file.filename=/etc/traefik/tls.yml"
+      - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
       - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
       - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.le.acme.tlschallenge=true"
+      - "--certificatesresolvers.le.acme.email=${LE_EMAIL?Variable is not set}"
+      - "--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.le.acme.httpchallenge.entrypoint=web"
+
     deploy:
       replicas: 1
       placement:
@@ -75,9 +63,10 @@ services:
         - "traefik.docker.network=swarm-net"
         - "traefik.http.services.dashboard.loadbalancer.server.port=8080"
         - "traefik.http.routers.dashboard.service=api@internal"
-        - "traefik.http.routers.dashboard.rule=Host(`dashboard.${DOMAIN:-traefik.me}`)"
+        - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN:-jayeson.com.sg}`)"
         - "traefik.http.routers.dashboard.entrypoints=websecure"
         - "traefik.http.routers.dashboard.tls=true"
+        - "traefik.http.routers.dashboard.tls.certresolver=le"
         - "traefik.http.routers.dashboard.middlewares=dashboard-auth"
         - "traefik.http.middlewares.dashboard-auth.basicauth.users=${TRAEFIK_USER?Variable is not set}:${TRAEFIK_PASSWD?Variable is not set}"
 
@@ -99,8 +88,9 @@ services:
       labels:
         - "traefik.enable=true"
         - "traefik.docker.network=swarm-net"
-        - "traefik.http.routers.portainer.service=portainer"
         - "traefik.http.services.portainer.loadbalancer.server.port=9000"
-        - "traefik.http.routers.portainer.rule=Host(`portainer.${DOMAIN:-traefik.me}`)"
+        - "traefik.http.routers.portainer.service=portainer"
+        - "traefik.http.routers.portainer.rule=Host(`portainer.${DOMAIN:-jayeson.com.sg}`)"
         - "traefik.http.routers.portainer.entrypoints=websecure"
         - "traefik.http.routers.portainer.tls=true"
+        - "traefik.http.routers.portainer.tls.certresolver=le"
