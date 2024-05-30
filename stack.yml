@@ -51,14 +51,14 @@ services:
       - ./traefik/tls.yml:/etc/traefik/tls.yml:ro
       - certs:/etc/ssl/traefik:ro
     command:
-      - "--api"
       - "--log.level=DEBUG"
+      - "--api.dashboard=true"
       - "--api.insecure=true"
       - "--metrics.prometheus=true"
       - "--metrics.prometheus.buckets=0.1,0.3,1.2,5.0"
       - "--providers.docker=true"
       - "--providers.docker.watch"
-      - "--providers.docker.swarmmode=true"
+      - "--providers.swarm=true"
       - "--providers.file.filename=/etc/traefik/tls.yml"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
@@ -79,13 +79,16 @@ services:
         - "traefik.http.routers.dashboard.entrypoints=websecure"
         - "traefik.http.routers.dashboard.tls=true"
         - "traefik.http.routers.dashboard.middlewares=dashboard-auth"
-        - "traefik.http.middlewares.dashboard-auth.basicauth.users=${TRAEFIK_USER?Variable is not set}:${TRAEFIK_PASSWD?Variable is not set}"
+        - "traefik.http.middlewares.dashboard-auth.basicauth.users=${TRAEFIK_USER:-admin}:${TRAEFIK_PASSWD?Variable is not set}"
 
   portainer:
     hostname: portainer
     image: "portainer/portainer-ce:latest"
     networks:
       - swarm-net
+    ports:
+      - target: 9000
+        published: 9000
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
